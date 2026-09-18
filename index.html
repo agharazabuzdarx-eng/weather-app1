@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta property="og:title" content="Current Weather Check">
+    <meta property="og:description" content="Check current weather information easily.">
+    <meta property="og:image" content="https://idyllic-centaur-76a078.netlify.app/preview.jpg">
+    <meta property="og:image:alt" content="Current weather dashboard preview">
+    <meta property="og:url" content="https://idyllic-centaur-76a078.netlify.app/">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" cosntent="summary_large_image">
+    <meta name="twitter:image" content="https://idyllic-centaur-76a078.netlify.app/preview.jpg">
+    <title>Current weather check</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.0/css/all.css">
+    </head>
+<body>
+    <div class="container">
+        <h1>Current Weather</h1>
+        <div class="search-bar">
+            <input type="text" id="cityInput" placeholder="Enter City Name">
+            <button id="searchBtn"><i class="fa-solid fa-magnifying-glass"></i></button>
+            <div id="error" class="error-message"></div>
+            <div id="weatherInfo" class="weatherInfo hidden">
+                <h2 id="cityName">Lahore</h2>
+                <div id="dateTime" class="date-time"></div>
+                <div id="qamariDate" class="date-box"></div>
+                <div id="hinduDate" class="date-box"></div>
+                <div id="condition" class="condition"></div>
+                <div class="details">
+                    <div><i class="fa-solid fa-temperature-three-quarters"></i><span id="temperatur">°C</span></div>
+                    <div><i class="fa-solid fa-wind"></i><span id="windSpeed"></span>km/hr</div>
+                    <div><i class="fa-solid fa-droplet"></i><span id="humidity"></span>% Humidity</div>
+                    <div><i class="fa-solid fa-sun"></i><span id="sunrise">Sunrise: --:--</span></div>
+                    <div><i class="fa-solid fa-moon"></i><span id="sunset">Sunset: --:--</span></div>
+                    <p>Made by Agha Raza Hussain Buzdar</p>
+                </div>
+            </div>
+        </div>
+
+    </div>     
+    
+
+    <script src="script.js"></script>
+</body>
+</html>
