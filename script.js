@@ -56,12 +56,34 @@ function showError(message) {
     weatherInfo.classList.add('hidden');
 }
 
+function getCityDate(weatherData) {
+    if (!weatherData?.dt) {
+        return null;
+    }
+
+    const timezoneOffset = Number(weatherData.timezone || 0);
+    return new Date((weatherData.dt + timezoneOffset) * 1000);
+}
+
+function getTimezoneLabel(timezoneSeconds) {
+    if (!Number.isFinite(timezoneSeconds)) {
+        return 'GMT';
+    }
+
+    const totalMinutes = Math.abs(Math.round(timezoneSeconds / 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const sign = timezoneSeconds >= 0 ? '+' : '-';
+
+    return `GMT${sign}${hours}${minutes ? ':' + String(minutes).padStart(2, '0') : ''}`;
+}
+
 function formatLocalDateTime(weatherData) {
     if (!weatherData.dt) {
         return 'Date unavailable';
     }
 
-    const date = new Date(weatherData.dt * 1000);
+    const date = getCityDate(weatherData);
 
     const formatter = new Intl.DateTimeFormat('en-US', {
         weekday: 'long',
@@ -70,10 +92,11 @@ function formatLocalDateTime(weatherData) {
         year: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-        timeZoneName: 'short'
+        timeZone: 'UTC',
+        hour12: true
     });
 
-    return formatter.format(date);
+    return `${formatter.format(date)} ${getTimezoneLabel(weatherData.timezone)}`;
 }
 
 function normalizeIslamicMonthName(dateText) {
@@ -88,7 +111,11 @@ function formatQamariDate(weatherData) {
         return 'Qamari date unavailable';
     }
 
-    const date = new Date(weatherData.dt * 1000);
+    const date = getCityDate(weatherData);
+    const countryCode = (weatherData.sys?.country || '').toUpperCase();
+    const localAdjustmentDays = countryCode === 'PK' ? 2 : 0;
+    const adjustedDate = new Date(date.getTime() - (localAdjustmentDays * 24 * 60 * 60 * 1000));
+
     const locales = [
         'ar-SA-u-ca-islamic',
         'ur-PK-u-ca-islamic-umalqura',
@@ -98,7 +125,8 @@ function formatQamariDate(weatherData) {
     const options = {
         day: 'numeric',
         month: 'long',
-        year: 'numeric'
+        year: 'numeric',
+        timeZone: 'UTC'
     };
 
     for (const locale of locales) {
@@ -107,7 +135,7 @@ function formatQamariDate(weatherData) {
             const resolvedCalendar = formatter.resolvedOptions().calendar;
 
             if (resolvedCalendar && resolvedCalendar.toLowerCase().includes('islamic')) {
-                return normalizeIslamicMonthName(formatter.format(date));
+                return normalizeIslamicMonthName(formatter.format(adjustedDate));
             }
         } catch (error) {
             // Ignore unsupported locale combinations and continue to the next one.
@@ -119,35 +147,39 @@ function formatQamariDate(weatherData) {
 
 function formatHinduDate(weatherData) {
     if (!weatherData.dt) {
-        return 'Hindu/Indian date unavailable';
+        return 'Hindu/Regional date unavailable';
     }
 
-    const date = new Date(weatherData.dt * 1000);
+    const localDate = getCityDate(weatherData);
+    const baseAssuDay = Date.UTC(2026, 8, 25);
+    const currentLocalDay = Date.UTC(
+        localDate.getUTCFullYear(),
+        localDate.getUTCMonth(),
+        localDate.getUTCDate()
+    );
+    const dayOffset = (currentLocalDay - baseAssuDay) / 86400000;
+    const assuDay = 9 + Math.floor(dayOffset);
+    const assuYear = localDate.getUTCFullYear() + 57;
 
-    const formatter = new Intl.DateTimeFormat('en-IN-u-ca-indian', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZoneName: 'short'
-    });
+    if (Number.isFinite(assuDay)) {
+        return `Assu ${assuDay}, ${assuYear}`;
+    }
 
-    return `Hindu/Indian Date: ${formatter.format(date)}`;
+    return 'Hindu/Regional date unavailable';
 }
 
-function formatClockTime(timestamp) {
+function formatClockTime(timestamp, timezoneSeconds) {
     if (!timestamp) {
         return '--:--';
     }
 
-    const date = new Date(timestamp * 1000);
+    const adjustedDate = new Date((timestamp + Number(timezoneSeconds || 0)) * 1000);
     return new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
         minute: '2-digit',
-        hour12: true
-    }).format(date);
+        hour12: true,
+        timeZone: 'UTC'
+    }).format(adjustedDate);
 }
 //adding Event Listener to button.
 
@@ -177,24 +209,66 @@ function formatClockTime(timestamp) {
 //     }, 1500);
 // }
 
-function updateWeather(weatherData, locationName, countryName) {
-    const mainCondition = (weatherData.weather?.[0]?.main || 'Clear').toLowerCase();
-    const iconMap = {
-        clear: 'fa-solid fa-sun',
-        clouds: 'fa-solid fa-cloud',
-        rain: 'fa-solid fa-cloud-rain',
-        drizzle: 'fa-solid fa-cloud-rain',
-        thunderstorm: 'fa-solid fa-cloud-bolt',
-        snow: 'fa-solid fa-snowflake',
-        mist: 'fa-solid fa-smog',
-        fog: 'fa-solid fa-smog',
-        haze: 'fa-solid fa-smog'
-    };
+function getWeatherDetail(weatherData) {
+    const code = Number(weatherData.weather?.[0]?.id ?? 800);
+    const cloudCoverage = Number(weatherData.clouds?.all ?? 0);
+    const main = (weatherData.weather?.[0]?.main || '').toLowerCase();
 
-    const detail = {
-        text: weatherData.weather?.[0]?.main || 'Unknown condition',
-        icon: iconMap[mainCondition] || 'fa-solid fa-cloud'
+    if (code >= 200 && code < 300) {
+        return { text: 'Thunderstorm', icon: 'fa-solid fa-cloud-bolt' };
+    }
+
+    if (code >= 300 && code < 600) {
+        return { text: 'Rain', icon: 'fa-solid fa-cloud-rain' };
+    }
+
+    if (code >= 600 && code < 700) {
+        return { text: 'Snow', icon: 'fa-solid fa-snowflake' };
+    }
+
+    if (code >= 700 && code < 782) {
+        return { text: 'Mist', icon: 'fa-solid fa-smog' };
+    }
+
+    if (code === 800) {
+        if (cloudCoverage >= 60) {
+            return { text: 'Clouds', icon: 'fa-solid fa-cloud' };
+        }
+        return { text: 'Clear', icon: 'fa-solid fa-sun' };
+    }
+
+    if (code >= 801 && code <= 804) {
+        return { text: 'Clouds', icon: 'fa-solid fa-cloud' };
+    }
+
+    if (main.includes('clear')) {
+        return { text: 'Clear', icon: 'fa-solid fa-sun' };
+    }
+
+    if (main.includes('cloud')) {
+        return { text: 'Clouds', icon: 'fa-solid fa-cloud' };
+    }
+
+    if (main.includes('rain')) {
+        return { text: 'Rain', icon: 'fa-solid fa-cloud-rain' };
+    }
+
+    if (main.includes('snow')) {
+        return { text: 'Snow', icon: 'fa-solid fa-snowflake' };
+    }
+
+    if (main.includes('mist') || main.includes('fog') || main.includes('haze')) {
+        return { text: 'Mist', icon: 'fa-solid fa-smog' };
+    }
+
+    return {
+        text: weatherData.weather?.[0]?.main || 'Clouds',
+        icon: 'fa-solid fa-cloud'
     };
+}
+
+function updateWeather(weatherData, locationName, countryName) {
+    const detail = getWeatherDetail(weatherData);
 
     cityName.textContent = `${locationName || weatherData.name}, ${countryName || weatherData.sys?.country || ''}`.trim();
     dateTime.textContent = formatLocalDateTime(weatherData);
@@ -204,8 +278,8 @@ function updateWeather(weatherData, locationName, countryName) {
     temperatur.textContent = `${Math.round(weatherData.main?.temp ?? 0)}°C`;
     windSpeed.textContent = `${Math.round(weatherData.wind?.speed ?? 0)}`;
     humidity.textContent = `${Math.round(weatherData.main?.humidity ?? 0)}`;
-    sunrise.textContent = `Sunrise: ${formatClockTime(weatherData.sys?.sunrise)}`;
-    sunset.textContent = `Sunset: ${formatClockTime(weatherData.sys?.sunset)}`;
+    sunrise.textContent = `Sunrise: ${formatClockTime(weatherData.sys?.sunrise, weatherData.timezone)}`;
+    sunset.textContent = `Sunset: ${formatClockTime(weatherData.sys?.sunset, weatherData.timezone)}`;
 
     errorMessage.textContent = '';
     weatherInfo.classList.remove('hidden');
