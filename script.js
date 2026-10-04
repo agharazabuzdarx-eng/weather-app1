@@ -158,7 +158,7 @@ function formatHinduDate(weatherData) {
         localDate.getUTCDate()
     );
     const dayOffset = (currentLocalDay - baseAssuDay) / 86400000;
-    const assuDay = 9 + Math.floor(dayOffset);
+    const assuDay = 11 + Math.floor(dayOffset);
     const assuYear = localDate.getUTCFullYear() + 57;
 
     if (Number.isFinite(assuDay)) {
