@@ -151,21 +151,45 @@ function formatHinduDate(weatherData) {
     }
 
     const localDate = getCityDate(weatherData);
-    const baseAssuDay = Date.UTC(2026, 8, 25);
     const currentLocalDay = Date.UTC(
         localDate.getUTCFullYear(),
         localDate.getUTCMonth(),
         localDate.getUTCDate()
     );
-    const dayOffset = (currentLocalDay - baseAssuDay) / 86400000;
-    const assuDay = 11 + Math.floor(dayOffset);
-    const assuYear = localDate.getUTCFullYear() + 57;
 
-    if (Number.isFinite(assuDay)) {
-        return `Assu ${assuDay}, ${assuYear}`;
+    const months = [
+        { name: 'Magh', month: 0, day: 13 },
+        { name: 'Phagun', month: 1, day: 12 },
+        { name: 'Chet', month: 2, day: 14 },
+        { name: 'Vaisakh', month: 3, day: 14 },
+        { name: 'Jeth', month: 4, day: 15 },
+        { name: 'Harh', month: 5, day: 15 },
+        { name: 'Sawan', month: 6, day: 16 },
+        { name: 'Bhadon', month: 7, day: 16 },
+        { name: 'Assu', month: 8, day: 15 },
+        { name: 'Katak', month: 9, day: 15 },
+        { name: 'Maghar', month: 10, day: 14 },
+        { name: 'Poh', month: 11, day: 14 }
+    ];
+    const calendarYear = localDate.getUTCFullYear();
+    const monthStarts = months.flatMap((month) =>
+        [calendarYear - 1, calendarYear].map((year) => ({
+            ...month,
+            timestamp: Date.UTC(year, month.month, month.day)
+        }))
+    );
+    const currentMonth = monthStarts
+        .filter((month) => month.timestamp <= currentLocalDay)
+        .sort((first, second) => second.timestamp - first.timestamp)[0];
+
+    if (!currentMonth) {
+        return 'Hindu/Regional date unavailable';
     }
 
-    return 'Hindu/Regional date unavailable';
+    const monthDay = Math.floor((currentLocalDay - currentMonth.timestamp) / 86400000) + 1;
+    const calendarYearLabel = localDate.getUTCFullYear() + 57;
+
+    return `${currentMonth.name} ${monthDay}, ${calendarYearLabel}`;
 }
 
 function formatClockTime(timestamp, timezoneSeconds) {
