@@ -19,6 +19,9 @@ const windSpeed = document.getElementById('windSpeed');
 const humidity = document.getElementById('humidity');
 const sunrise = document.getElementById('sunrise');
 const sunset = document.getElementById('sunset');
+const installAppBtn = document.getElementById('installAppBtn');
+const installMessage = document.getElementById('installMessage');
+let deferredInstallPrompt = null;
 
 const weatherCodes = {
     0: { text: 'Clear sky', icon: 'fa-solid fa-sun' },
@@ -332,6 +335,52 @@ async function searchWeather() {
     } catch (error) {
         showError('Unable to fetch weather data right now. Please try again.');
     }
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+});
+
+async function installApp() {
+    if (!deferredInstallPrompt) {
+        const isAppleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        installMessage.textContent = isAppleMobile
+            ? 'To install, tap Share in your browser, then choose Add to Home Screen.'
+            : 'To install, open your browser menu and choose Install app or Add to Home screen.';
+        return;
+    }
+
+    const installPrompt = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+
+    try {
+        await installPrompt.prompt();
+        const { outcome } = await installPrompt.userChoice;
+        installMessage.textContent = outcome === 'accepted'
+            ? 'The app was installed.'
+            : 'App installation was canceled.';
+    } catch (error) {
+        console.error('App installation failed:', error);
+        installMessage.textContent = 'App installation failed. Please try again from your browser menu.';
+    }
+}
+
+installAppBtn.addEventListener('click', installApp);
+
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    installAppBtn.textContent = 'App Installed';
+    installAppBtn.disabled = true;
+    installMessage.textContent = 'The app was installed.';
+});
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js').catch((error) => {
+        console.error('Service worker registration failed:', error);
+        installMessage.textContent = 'App installation requires this site to be served over HTTPS.';
+    });
 }
 
 // const STORAGE_KEY = 'dailyCommunityPosts';
