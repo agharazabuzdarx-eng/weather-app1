@@ -21,7 +21,17 @@ const sunrise = document.getElementById('sunrise');
 const sunset = document.getElementById('sunset');
 const installAppBtn = document.getElementById('installAppBtn');
 const installMessage = document.getElementById('installMessage');
+const prayerTimesDate = document.getElementById('prayerTimesDate');
+const prayerTimesStatus = document.getElementById('prayerTimesStatus');
+const prayerTimeElements = {
+    Fajr: document.getElementById('fajrTime'),
+    Dhuhr: document.getElementById('dhuhrTime'),
+    Asr: document.getElementById('asrTime'),
+    Maghrib: document.getElementById('maghribTime'),
+    Isha: document.getElementById('ishaTime')
+};
 let deferredInstallPrompt = null;
+let latestSearchId = 0;
 
 const weatherCodes = {
     0: { text: 'Clear sky', icon: 'fa-solid fa-sun' },
@@ -60,7 +70,7 @@ function showError(message) {
 }
 
 function getCityDate(weatherData) {
-    if (!weatherData?.dt) {
+    if (!Number.isFinite(Number(weatherData?.dt))) {
         return null;
     }
 
@@ -178,6 +188,7 @@ function formatHinduDate(weatherData) {
     const monthStarts = months.flatMap((month) =>
         [calendarYear - 1, calendarYear].map((year) => ({
             ...month,
+            year,
             timestamp: Date.UTC(year, month.month, month.day)
         }))
     );
@@ -190,7 +201,7 @@ function formatHinduDate(weatherData) {
     }
 
     const monthDay = Math.floor((currentLocalDay - currentMonth.timestamp) / 86400000) + 1;
-    const calendarYearLabel = localDate.getUTCFullYear() + 57;
+    const calendarYearLabel = currentMonth.year + 57 - (currentMonth.month < 2 ? 1 : 0);
 
     return `${currentMonth.name} ${monthDay}, ${calendarYearLabel}`;
 }
@@ -303,13 +314,118 @@ function updateWeather(weatherData, locationName, countryName) {
     hinduDate.textContent = formatHinduDate(weatherData);
     condition.innerHTML = `${detail.text} <i class="${detail.icon}"></i>`;
     temperatur.textContent = `${Math.round(weatherData.main?.temp ?? 0)}°C`;
-    windSpeed.textContent = `${Math.round(weatherData.wind?.speed ?? 0)}`;
+    windSpeed.textContent = `${Math.round((weatherData.wind?.speed ?? 0) * 3.6)}`;
     humidity.textContent = `${Math.round(weatherData.main?.humidity ?? 0)}`;
     sunrise.textContent = `Sunrise: ${formatClockTime(weatherData.sys?.sunrise, weatherData.timezone)}`;
     sunset.textContent = `Sunset: ${formatClockTime(weatherData.sys?.sunset, weatherData.timezone)}`;
 
     errorMessage.textContent = '';
     weatherInfo.classList.remove('hidden');
+}
+
+function formatPrayerTime(value) {
+    const match = typeof value === 'string' ? value.match(/^(\d{1,2}):(\d{2})/) : null;
+    if (!match) {
+        return null;
+    }
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59) {
+        return null;
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'UTC'
+    }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
+}
+
+function formatApiQamariDate(hijriDate) {
+    const day = Number(hijriDate?.day);
+    const month = hijriDate?.month?.en;
+    const year = Number(hijriDate?.year);
+
+    if (!Number.isInteger(day) || day < 1 || day > 30
+        || typeof month !== 'string' || !month.trim()
+        || !Number.isInteger(year) || year < 1) {
+        return null;
+    }
+
+    return `${day} ${month} ${year} AH`;
+}
+
+async function loadPrayerTimes(weatherData, searchId) {
+    const cityDate = getCityDate(weatherData);
+    const latitude = Number(weatherData.coord?.lat);
+    const longitude = Number(weatherData.coord?.lon);
+
+    Object.values(prayerTimeElements).forEach((element) => {
+        element.textContent = '--';
+    });
+    prayerTimesDate.textContent = cityDate
+        ? `For ${new Intl.DateTimeFormat('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+            timeZone: 'UTC'
+        }).format(cityDate)}`
+        : '';
+    prayerTimesStatus.textContent = 'Loading prayer times...';
+
+    if (!cityDate || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        prayerTimesStatus.textContent = 'Prayer times are unavailable for this location.';
+        return;
+    }
+
+    const date = [
+        String(cityDate.getUTCDate()).padStart(2, '0'),
+        String(cityDate.getUTCMonth() + 1).padStart(2, '0'),
+        cityDate.getUTCFullYear()
+    ].join('-');
+    const parameters = new URLSearchParams({
+        latitude: String(latitude),
+        longitude: String(longitude),
+        method: '1',
+        school: '1'
+    });
+
+    try {
+        const response = await fetch(`https://api.aladhan.com/v1/timings/${date}?${parameters}`);
+        const result = await response.json();
+
+        if (!response.ok || Number(result.code) !== 200 || !result.data?.timings) {
+            throw new Error(result.status || `Prayer service returned HTTP ${response.status}`);
+        }
+
+        if (searchId !== latestSearchId) {
+            return;
+        }
+
+        const apiQamariDate = formatApiQamariDate(result.data.date?.hijri);
+        if (apiQamariDate) {
+            qamariDate.textContent = apiQamariDate;
+        }
+
+        for (const [prayer, element] of Object.entries(prayerTimeElements)) {
+            const time = formatPrayerTime(result.data.timings[prayer]);
+            if (!time) {
+                throw new Error(`Prayer service returned an invalid ${prayer} time`);
+            }
+            element.textContent = time;
+        }
+        prayerTimesStatus.textContent = 'Times can vary slightly by local mosque and moon sighting.';
+    } catch (error) {
+        if (searchId !== latestSearchId) {
+            return;
+        }
+
+        console.error('Prayer times could not be loaded:', error);
+        prayerTimesStatus.textContent = 'Prayer times could not be loaded. Check your connection and try again.';
+    }
 }
 
 async function searchWeather() {
@@ -320,20 +436,51 @@ async function searchWeather() {
         return;
     }
 
+    const searchId = ++latestSearchId;
+    searchBtn.disabled = true;
+    errorMessage.textContent = '';
+
     try {
         const weatherResponse = await fetch(
             `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`
         );
         const weatherData = await weatherResponse.json();
+        const statusCode = Number(weatherData.cod || weatherResponse.status);
 
-        if (weatherData.cod && weatherData.cod !== 200) {
-            showError(weatherData.message || 'City not found. Please try another city.');
+        if (!weatherResponse.ok || (weatherData.cod && statusCode !== 200)) {
+            const message = statusCode === 401
+                ? 'Weather API key was rejected. Please check that it is active.'
+                : statusCode === 404
+                    ? 'City not found. Please check the spelling and try again.'
+                    : statusCode === 429
+                        ? 'Weather service request limit reached. Please try again later.'
+                        : statusCode >= 500
+                            ? 'Weather service is temporarily unavailable. Please try again later.'
+                            : weatherData.message || 'Weather request failed. Please try again.';
+            if (searchId === latestSearchId) {
+                showError(message);
+            }
             return;
         }
 
+        if (!weatherData.main || !weatherData.sys || !weatherData.coord) {
+            throw new Error('Weather service returned incomplete data');
+        }
+
+        if (searchId !== latestSearchId) {
+            return;
+        }
         updateWeather(weatherData, weatherData.name, weatherData.sys?.country || '');
+        await loadPrayerTimes(weatherData, searchId);
     } catch (error) {
-        showError('Unable to fetch weather data right now. Please try again.');
+        if (searchId === latestSearchId) {
+            console.error('Weather request failed:', error);
+            showError('Could not load weather. Check your connection and API settings, then try again.');
+        }
+    } finally {
+        if (searchId === latestSearchId) {
+            searchBtn.disabled = false;
+        }
     }
 }
 

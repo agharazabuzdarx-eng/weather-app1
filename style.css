@@ -191,6 +191,58 @@ h1 {
     color: #f59e0b;
 }
 
+.prayer-times {
+    margin-top: 20px;
+    padding: 18px;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.prayer-times h3 {
+    margin: 0 0 8px;
+    color: #fbbf24;
+    text-align: center;
+}
+
+.prayer-times-date,
+.prayer-times-status,
+.prayer-times-method {
+    margin: 8px 0;
+    color: #f2f2f2;
+    text-align: center;
+}
+
+.prayer-times-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.prayer-times-grid div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    padding: 12px 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+}
+
+.prayer-times-grid strong {
+    color: #ffffff;
+    font-size: 1.1rem;
+}
+
+.prayer-times-status {
+    min-height: 1.2em;
+}
+
+.prayer-times-method {
+    font-size: 0.85rem;
+}
+
 /* .share-panel {
     display: flex;
     justify-content: center;
